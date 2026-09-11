@@ -1,0 +1,424 @@
+# ==============================================================
+# DEFINISCE IL TEMPO DI IRRIGAZIONE
+# ==============================================================
+input_number:
+  durata_irrigazione:
+    name: Durata irrigazione
+    min: 10
+    max: 1800
+    step: 1
+    unit_of_measurement: "s"
+    mode: box
+    icon: mdi:timer-outline
+
+mqtt:
+
+  switch:
+
+    # ==========================================================
+    # ELETTROVALVOLA 1
+    # ==========================================================
+
+    - name: "Elettrovalvola 1"
+      unique_id: "elettrovalvola_1"
+
+      state_topic: >-
+        application/def1c37a-cbb5-4e7e-8ef4-c6051cf85610/device/8df0764192dd2973/event/up
+
+      value_template: >-
+        {% if value_json.fPort == 10 and value_json.object is defined %}
+          {{ value_json.object.uscita_1 | lower }}
+        {% else %}
+          {{ states('switch.elettrovalvola_1') }}
+        {% endif %}
+
+      payload_on: "true"
+      payload_off: "false"
+
+      state_on: "true"
+      state_off: "false"
+
+      command_topic: >-
+        application/def1c37a-cbb5-4e7e-8ef4-c6051cf85610/device/8df0764192dd2973/command/down
+
+      command_template: >-
+        {
+          "devEui": "8df0764192dd2973",
+          "confirmed": false,
+          "fPort": 10,
+          "object": {
+            "comando": {{ 1 if value == 'true' else 2 }},
+            "uscita": 1,
+            "tempo": {{ states('input_number.durata_irrigazione') | int(0) if value == 'true' else 0 }}
+          }
+        }
+
+      qos: 0
+      retain: false
+      optimistic: false
+
+      icon: mdi:valve
+
+
+    # ==========================================================
+    # ELETTROVALVOLA 2
+    # ==========================================================
+
+    - name: "Elettrovalvola 2"
+      unique_id: "elettrovalvola_2"
+
+      state_topic: >-
+        application/def1c37a-cbb5-4e7e-8ef4-c6051cf85610/device/8df0764192dd2973/event/up
+
+      value_template: >-
+        {% if value_json.fPort == 10 and value_json.object is defined %}
+          {{ value_json.object.uscita_2 | lower }}
+        {% else %}
+          {{ states('switch.elettrovalvola_2') }}
+        {% endif %}
+
+      payload_on: "true"
+      payload_off: "false"
+
+      state_on: "true"
+      state_off: "false"
+
+      command_topic: >-
+        application/def1c37a-cbb5-4e7e-8ef4-c6051cf85610/device/8df0764192dd2973/command/down
+
+      command_template: >-
+        {
+          "devEui": "8df0764192dd2973",
+          "confirmed": false,
+          "fPort": 10,
+          "object": {
+            "comando": {{ 1 if value == 'true' else 2 }},
+            "uscita": 2,
+            "tempo": {{ states('input_number.durata_irrigazione') | int if value == 'true' else 0 }}
+          }
+        }
+
+      qos: 0
+      retain: false
+      optimistic: false
+
+      icon: mdi:valve
+
+
+    # ==========================================================
+    # ELETTROVALVOLA 3
+    # ==========================================================
+
+    - name: "Elettrovalvola 3"
+      unique_id: "elettrovalvola_3"
+
+      state_topic: >-
+        application/def1c37a-cbb5-4e7e-8ef4-c6051cf85610/device/8df0764192dd2973/event/up
+
+      value_template: >-
+        {% if value_json.fPort == 10 and value_json.object is defined %}
+          {{ value_json.object.uscita_3 | lower }}
+        {% else %}
+          {{ states('switch.elettrovalvola_3') }}
+        {% endif %}
+
+      payload_on: "true"
+      payload_off: "false"
+
+      state_on: "true"
+      state_off: "false"
+
+      command_topic: >-
+        application/def1c37a-cbb5-4e7e-8ef4-c6051cf85610/device/8df0764192dd2973/command/down
+
+      command_template: >-
+        {
+          "devEui": "8df0764192dd2973",
+          "confirmed": false,
+          "fPort": 10,
+          "object": {
+            "comando": {{ 1 if value == 'true' else 2 }},
+            "uscita": 3,
+            "tempo": {{ states('input_number.durata_irrigazione') | int if value == 'true' else 0 }}
+          }
+        }
+
+      qos: 0
+      retain: false
+      optimistic: false
+
+      icon: mdi:valve
+
+
+    # ==========================================================
+    # ELETTROVALVOLA 4
+    # ==========================================================
+
+    - name: "Elettrovalvola 4"
+      unique_id: "elettrovalvola_4"
+
+      state_topic: >-
+        application/def1c37a-cbb5-4e7e-8ef4-c6051cf85610/device/8df0764192dd2973/event/up
+
+      value_template: >-
+        {% if value_json.fPort == 10 and value_json.object is defined %}
+          {{ value_json.object.uscita_4 | lower }}
+        {% else %}
+          {{ states('switch.elettrovalvola_4') }}
+        {% endif %}
+
+      payload_on: "true"
+      payload_off: "false"
+
+      state_on: "true"
+      state_off: "false"
+
+      command_topic: >-
+        application/def1c37a-cbb5-4e7e-8ef4-c6051cf85610/device/8df0764192dd2973/command/down
+
+      command_template: >-
+        {
+          "devEui": "8df0764192dd2973",
+          "confirmed": false,
+          "fPort": 10,
+          "object": {
+            "comando": {{ 1 if value == 'true' else 2 }},
+            "uscita": 4,
+            "tempo": {{ states('input_number.durata_irrigazione') | int if value == 'true' else 0 }}
+          }
+        }
+
+      qos: 0
+      retain: false
+      optimistic: false
+
+      icon: mdi:valve
+
+
+    # ==========================================================
+    # ELETTROVALVOLA 5
+    # ==========================================================
+
+    - name: "Elettrovalvola 5"
+      unique_id: "elettrovalvola_5"
+
+      state_topic: >-
+        application/def1c37a-cbb5-4e7e-8ef4-c6051cf85610/device/8df0764192dd2973/event/up
+
+      value_template: >-
+        {% if value_json.fPort == 10 and value_json.object is defined %}
+          {{ value_json.object.uscita_5 | lower }}
+        {% else %}
+          {{ states('switch.elettrovalvola_5') }}
+        {% endif %}
+
+      payload_on: "true"
+      payload_off: "false"
+
+      state_on: "true"
+      state_off: "false"
+
+      command_topic: >-
+        application/def1c37a-cbb5-4e7e-8ef4-c6051cf85610/device/8df0764192dd2973/command/down
+
+      command_template: >-
+        {
+          "devEui": "8df0764192dd2973",
+          "confirmed": false,
+          "fPort": 10,
+          "object": {
+            "comando": {{ 1 if value == 'true' else 2 }},
+            "uscita": 5,
+            "tempo": {{ states('input_number.durata_irrigazione') | int if value == 'true' else 0 }}
+          }
+        }
+
+      qos: 0
+      retain: false
+      optimistic: false
+
+      icon: mdi:valve
+
+
+    # ==========================================================
+    # ELETTROVALVOLA 6
+    # ==========================================================
+
+    - name: "Elettrovalvola 6"
+      unique_id: "elettrovalvola_6"
+
+      state_topic: >-
+        application/def1c37a-cbb5-4e7e-8ef4-c6051cf85610/device/8df0764192dd2973/event/up
+
+      value_template: >-
+        {% if value_json.fPort == 10 and value_json.object is defined %}
+          {{ value_json.object.uscita_6 | lower }}
+        {% else %}
+          {{ states('switch.elettrovalvola_6') }}
+        {% endif %}
+
+      payload_on: "true"
+      payload_off: "false"
+
+      state_on: "true"
+      state_off: "false"
+
+      command_topic: >-
+        application/def1c37a-cbb5-4e7e-8ef4-c6051cf85610/device/8df0764192dd2973/command/down
+
+      command_template: >-
+        {
+          "devEui": "8df0764192dd2973",
+          "confirmed": false,
+          "fPort": 10,
+          "object": {
+            "comando": {{ 1 if value == 'true' else 2 }},
+            "uscita": 6,
+            "tempo": {{ states('input_number.durata_irrigazione') | int if value == 'true' else 0 }}
+          }
+        }
+
+      qos: 0
+      retain: false
+      optimistic: false
+
+      icon: mdi:valve
+
+
+    # ==========================================================
+    # ELETTROVALVOLA 7
+    # ==========================================================
+
+    - name: "Elettrovalvola 7"
+      unique_id: "elettrovalvola_7"
+
+      state_topic: >-
+        application/def1c37a-cbb5-4e7e-8ef4-c6051cf85610/device/8df0764192dd2973/event/up
+
+      value_template: >-
+        {% if value_json.fPort == 10 and value_json.object is defined %}
+          {{ value_json.object.uscita_7 | lower }}
+        {% else %}
+          {{ states('switch.elettrovalvola_7') }}
+        {% endif %}
+
+      payload_on: "true"
+      payload_off: "false"
+
+      state_on: "true"
+      state_off: "false"
+
+      command_topic: >-
+        application/def1c37a-cbb5-4e7e-8ef4-c6051cf85610/device/8df0764192dd2973/command/down
+
+      command_template: >-
+        {
+          "devEui": "8df0764192dd2973",
+          "confirmed": false,
+          "fPort": 10,
+          "object": {
+            "comando": {{ 1 if value == 'true' else 2 }},
+            "uscita": 7,
+            "tempo": {{ states('input_number.durata_irrigazione') | int if value == 'true' else 0 }}
+          }
+        }
+
+      qos: 0
+      retain: false
+      optimistic: false
+
+      icon: mdi:valve
+
+
+    # ==========================================================
+    # ELETTROVALVOLA 8
+    # ==========================================================
+
+    - name: "Elettrovalvola 8"
+      unique_id: "elettrovalvola_8"
+
+      state_topic: >-
+        application/def1c37a-cbb5-4e7e-8ef4-c6051cf85610/device/8df0764192dd2973/event/up
+
+      value_template: >-
+        {% if value_json.fPort == 10 and value_json.object is defined %}
+          {{ value_json.object.uscita_8 | lower }}
+        {% else %}
+          {{ states('switch.elettrovalvola_8') }}
+        {% endif %}
+
+      payload_on: "true"
+      payload_off: "false"
+
+      state_on: "true"
+      state_off: "false"
+
+      command_topic: >-
+        application/def1c37a-cbb5-4e7e-8ef4-c6051cf85610/device/8df0764192dd2973/command/down
+
+      command_template: >-
+        {
+          "devEui": "8df0764192dd2973",
+          "confirmed": false,
+          "fPort": 10,
+          "object": {
+            "comando": {{ 1 if value == 'true' else 2 }},
+            "uscita": 8,
+            "tempo": {{ states('input_number.durata_irrigazione') | int if value == 'true' else 0 }}
+          }
+        }
+
+      qos: 0
+      retain: false
+      optimistic: false
+
+      icon: mdi:valve
+      
+# Irrigazione
+irrigation_unlimited:
+  controllers:
+    zones:
+      - name: "Sprinkler Zona 1 "
+        entity_id: "switch.elettrovalvola_1"
+      - name: "Sprinkler Zona 2"
+        entity_id: "switch.elettrovalvola_2"
+      - name: "Sprinkler Zona 3"
+        entity_id: "switch.elettrovalvola_3"
+      - name: "Sprinkler Zona 4"
+        entity_id: "switch.elettrovalvola_4"
+      - name: "Sprinkler Zona 5"
+        entity_id: "switch.elettrovalvola_5"
+      - name: "Sprinkler Zona 6"
+        entity_id: "switch.elettrovalvola_6"
+      - name: "Sprinkler Zona 7"
+        entity_id: "switch.elettrovalvola_7"
+      - name: "Sprinkler Zona 8"
+        entity_id: "switch.elettrovalvola_8"
+    sequences:
+      - delay: "00:20"
+        schedules:
+          - name: "Sunrise"
+            time:
+              sun: "sunrise"
+          - name: "After sunset"
+            time:
+              sun: "sunset"
+              after: "00:30"
+        zones:
+          - zone_id: 1
+            duration: "00:01"
+          - zone_id: 2
+            duration: "00:01"
+          - zone_id: 3
+            duration: "00:01"
+          - zone_id: 4
+            duration: "00:01"
+          - zone_id: 5
+            duration: "00:01"
+          - zone_id: 6
+            duration: "00:01"
+          - zone_id: 7
+            duration: "00:01"
+          - zone_id: 8
+            duration: "00:01"
+            
