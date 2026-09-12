@@ -1,0 +1,1199 @@
+esphome:
+  name: kc868irrigazione
+  friendly_name: Test-kc
+  on_boot:
+    then: 
+      - script.execute: all_off
+    
+  #includes:
+  #  - uart_read_line_sensor.h
+
+#external_components:
+#  - source:
+#      type: git
+#      url: https://github.com/nebulous/esphome-uart-link
+
+#uart_tcp_client:
+#  id: bose
+#  host: 192.168.127.6
+#  port: 10055
+#  rx_buffer_size: 4096       # ring buffer size (default 4096)
+#  reconnect_interval: 5s     # auto-reconnect on disconnect (default 5s)
+#  stall_timeout: 15s         # force reconnect after silence (default 15s, 0 to disable)
+
+uart:
+  baud_rate: 9600
+  rx_pin: GPIO15
+  tx_pin: GPIO2
+  id: uart_0
+  #debug:
+  #  direction: BOTH
+  #  debug_prefix: "UART:"
+  #  dummy_receiver: true
+
+esp32:
+  board: nodemcu-32s
+
+ethernet:
+  type: LAN8720
+  mdc_pin: GPIO23
+  mdio_pin: GPIO18
+  clk:
+    mode: CLK_OUT
+    pin: 17
+  phy_addr: 0
+  #manual_ip:
+  #  static_ip: 10.0.0.42
+  #  gateway: 10.0.0.1
+  #  subnet: 255.255.255.0
+
+
+#wifi:
+#  networks:
+#  - ssid: !secret wifi_ssid1
+#    password: !secret pw_wifi1
+#  - ssid: !secret wifi_ssid2
+#    password: !secret pw_wifi2
+#  power_save_mode: none
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+#  ap:
+#    ssid: "Alarm kc Fallback Hotspot"
+#    password: !secret ap_password
+
+#captive_portal:
+
+# Enable logging NONE, ERROR, WARN, INFO, DEBUG, VERBOSE, VERY_VERBOSE
+logger:
+  level: DEBUG
+#  logs:
+#    text_sensor: INFO
+
+# Enable web server
+web_server:
+  port: 80
+  auth:
+    username: admin
+    password: !secret web_server_password
+    type: digest
+  version: 3
+
+# Enable Home Assistant API
+api:
+  encryption: 
+    key: !secret api_key
+  reboot_timeout: 0s
+
+ota:
+  - platform: esphome
+    password: !secret alarm_kc_ota_password
+
+
+
+i2c:
+  sda: GPIO4
+  scl: GPIO5
+  scan: True
+  id: bus_a
+  frequency: 400kHz
+  
+
+font:
+  - file: Google_Sans_Medium.ttf
+    id: my_font_1
+    size: 12
+  - file: Google_Sans_Bold.ttf
+    id: my_font_2
+    size: 12
+  - file: materialdesignicons-webfont.ttf
+    id: my_font_3
+    size: 12
+    
+substitutions:
+  display_timeout: '30000'
+  
+globals:
+  - id: display_attivo
+    type: bool
+    restore_value: no
+    initial_value: 'true'
+
+  - id: display_ultimo_evento
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+    
+  - id: programma_locale
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  - id: settore_locale
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: durata_irrigazione
+    type: uint32_t
+    restore_value: no
+    initial_value: '30'
+    
+  - id: irrigazione_uscita
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+  - id: irrigazione_comando
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+  - id: irrigazione_fine
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+    
+display:
+  - platform: ssd1306_i2c
+    model: SH1106_128X64
+    address: 0x3C
+    id: my_display
+    update_interval: 500ms
+
+    lambda: |-
+
+      // --------------------------------------------------
+      // Titolo
+      // --------------------------------------------------
+
+      it.printf(
+        0, 0,
+        id(my_font_2),
+        "IRRIGAZIONE"
+      );
+
+
+      // --------------------------------------------------
+      // Durata impostata
+      // --------------------------------------------------
+
+      uint32_t tempo = id(durata_irrigazione);
+
+      uint32_t minuti = tempo / 60;
+      uint32_t secondi = tempo % 60;
+
+
+      it.printf(
+        0, 20,
+        id(my_font_1),
+        "DURATA SETTORE"
+      );
+
+
+      it.printf(
+        20, 36,
+        id(my_font_2),
+        "%02u:%02u",
+        (unsigned int) minuti,
+        (unsigned int) secondi
+      );
+
+
+      // --------------------------------------------------
+      // Indicazione comando
+      // --------------------------------------------------
+
+      it.printf(
+        0, 54,
+        id(my_font_1),
+        "PREMI P1 = AVVIA"
+      );
+       
+sensor:
+
+  - platform: rotary_encoder
+    name: "Rotary Encoder"
+    id: encoder
+
+    pin_a:
+      number: GPIO33
+      inverted: true
+
+    pin_b:
+      number: GPIO32
+      inverted: true
+
+    min_value: 1
+    max_value: 181
+    publish_initial_value: true
+
+    on_clockwise:
+      then:
+        - script.execute: display_on
+        - script.stop: start_irrigation_script
+        - script.execute: all_off
+
+        - lambda: |-
+            
+            id(display_attivo) = true;
+            id(display_ultimo_evento) = millis();
+
+            int posizione = (int) id(encoder).state;
+
+            if (posizione <= 1) {
+              id(durata_irrigazione) = 30;
+            } else {
+              id(durata_irrigazione) =
+                60 + ((posizione - 2) * 60);
+            }
+
+            ESP_LOGI(
+              "irrigazione",
+              "Encoder: posizione=%d durata=%u secondi",
+              posizione,
+              (unsigned) id(durata_irrigazione)
+            );
+
+    on_anticlockwise:
+      then:
+        - script.execute: display_on
+        - script.stop: start_irrigation_script
+        - script.execute: all_off
+
+        - lambda: |-
+            
+            id(display_attivo) = true;
+            id(display_ultimo_evento) = millis();
+
+            int posizione = (int) id(encoder).state;
+
+            if (posizione <= 1) {
+              id(durata_irrigazione) = 30;
+            } else {
+              id(durata_irrigazione) =
+                60 + ((posizione - 2) * 60);
+            }
+
+            ESP_LOGI(
+              "irrigazione",
+              "Encoder: posizione=%d durata=%u secondi",
+              posizione,
+              (unsigned) id(durata_irrigazione)
+            );
+          
+  - platform: adc
+    pin: GPIO34
+    name: "Analog in 1"
+    attenuation: 0db
+    filters:
+      - multiply: 1.6
+    id: adc_1
+  - platform: adc
+    pin: GPIO35
+    name: "Analog in 2"
+    attenuation: 0db
+    filters:
+      - multiply: 1.6
+    id: adc_2
+#  - platform: wifi_signal
+#    name: "WiFi Signal Alarm kc"
+#    update_interval: 120s
+ 
+pcf8574:
+  - id: 'ingressi'
+    address: 0x22
+    pcf8575: false
+  - id: 'uscite'
+    address: 0x24
+    pcf8575: false
+
+# Pcf8572 Inputs
+binary_sensor:
+  - platform: gpio
+    name: "Pulsante #0"
+    id: P0
+    pin:
+      number: GPIO0
+      inverted: true
+    
+  - platform: gpio
+    name: "Pulsante #1"
+    id: P1
+
+    pin:
+      number: GPIO13
+      inverted: true
+
+    on_press:
+      then:
+        - script.execute: display_on
+        - lambda: |-
+            id(display_attivo) = true;
+            id(display_ultimo_evento) = millis();
+
+            if (!id(programma_locale)) {
+
+              ESP_LOGI(
+                "irrigazione",
+                "P1: avvio sequenza locale"
+              );
+
+            } else {
+
+              ESP_LOGI(
+                "irrigazione",
+                "P1: STOP sequenza locale"
+              );
+            }
+
+        - if:
+            condition:
+              lambda: 'return !id(programma_locale);'
+            then:
+              - script.execute: start_sequenza_locale
+
+            else:
+              - script.execute: all_off
+
+              - lambda: |-
+                  id(programma_locale) = false;
+                  id(settore_locale) = 0;
+                  id(irrigazione_uscita) = 0;
+                  id(irrigazione_fine) = 0;
+
+                  ESP_LOGI(
+                    "irrigazione",
+                    "SEQUENZA LOCALE INTERROTTA"
+                  );
+      
+  - platform: gpio
+    name: "Ingresso #1"
+    id: "ingresso_1"
+    pin:
+      pcf8574: ingressi
+      number: 0
+      mode: INPUT
+      inverted: true
+
+  - platform: gpio
+    name: "Ingresso #2"
+    id: "ingresso_2"
+    pin:
+      pcf8574: ingressi
+      number: 1
+      mode: INPUT
+      inverted: true
+
+  - platform: gpio
+    name: "Ingresso #3"
+    id: "ingresso_3"
+    pin:
+      pcf8574: ingressi
+      number: 2
+      mode: INPUT
+      inverted: true
+
+  - platform: gpio
+    name: "Ingresso #4"
+    id: "ingresso_4"
+    pin:
+      pcf8574: ingressi
+      number: 3
+      mode: INPUT
+      inverted: true
+
+  - platform: gpio
+    name: "Ingresso #5"
+    id: "ingresso_5"
+    pin:
+      pcf8574: ingressi
+      number: 4
+      mode: INPUT
+      inverted: true
+
+  - platform: gpio
+    name: "Ingresso #6"
+    id: "ingresso_6"
+    pin:
+      pcf8574: ingressi
+      number: 5
+      mode: INPUT
+      inverted: true
+
+  - platform: gpio
+    name: "Ingresso #7"
+    id: "ingresso_7"
+    pin:
+      pcf8574: ingressi
+      number: 6
+      mode: INPUT
+      inverted: true
+
+  - platform: gpio
+    name: "Ingresso #8"
+    id: "ingresso_8"
+    pin:
+      pcf8574: ingressi
+      number: 7
+      mode: INPUT
+      inverted: true
+
+
+# Pcf8572 Outputs
+switch:
+  - platform: gpio
+    restore_mode: RESTORE_DEFAULT_OFF
+    name: "Uscita #1"
+    id: "uscita_1"
+    pin:
+      pcf8574: uscite
+      number: 0
+      mode: 
+        output: true
+      inverted: true
+
+  - platform: gpio
+    restore_mode: RESTORE_DEFAULT_OFF
+    name: "Uscita #2"
+    id: "uscita_2"
+    pin:
+      pcf8574: uscite
+      number: 1
+      mode:
+        output: true
+      inverted: true
+
+  - platform: gpio
+    restore_mode: RESTORE_DEFAULT_OFF
+    name: "Uscita #3"
+    id: "uscita_3"
+    pin:
+      pcf8574: uscite
+      number: 2
+      mode:
+        output: true
+      inverted: true
+
+  - platform: gpio
+    restore_mode: RESTORE_DEFAULT_OFF
+    name: "Uscita #4"
+    id: "uscita_4"
+    pin:
+      pcf8574: uscite
+      number: 3
+      mode:
+        output: true
+      inverted: true
+
+  - platform: gpio
+    restore_mode: RESTORE_DEFAULT_OFF
+    name: "Uscita #5"
+    id: "uscita_5"
+    pin:
+      pcf8574: uscite
+      number: 4
+      mode:
+        output: true
+      inverted: true
+
+  - platform: gpio
+    restore_mode: RESTORE_DEFAULT_OFF
+    name: "Uscita #6"
+    id: "uscita_6"
+    pin:
+      pcf8574: uscite
+      number: 5
+      mode:
+        output: true
+      inverted: true
+
+  - platform: gpio
+    restore_mode: RESTORE_DEFAULT_OFF
+    name: "Uscita #7"
+    id: "uscita_7"
+    pin:
+      pcf8574: uscite
+      number: 6
+      mode:
+        output: true
+      inverted: true
+
+  - platform: gpio
+    restore_mode: RESTORE_DEFAULT_OFF
+    name: "Uscita #8"
+    id: "uscita_8"
+    pin:
+      pcf8574: uscite
+      number: 7
+      mode:
+        output: true
+      inverted: true
+      
+#button:
+#  - platform: template
+#    name: "Transmit Packet"
+#    on_press:
+#        then:
+#          - uart.write: Ciao Heltec \n\l
+            
+#  - platform: template
+#    name: "Test ACK stato"
+#    on_press:
+#      - script.execute: send_status_ack
+            
+script:
+  - id: start_sequenza_locale
+    mode: restart
+    then:
+
+      # -----------------------------------------------
+      # Avvia modalità locale
+      # -----------------------------------------------
+
+      - lambda: |-
+          id(programma_locale) = true;
+          id(settore_locale) = 1;
+
+          ESP_LOGI(
+            "irrigazione",
+            "AVVIO SEQUENZA LOCALE - durata settore: %u secondi",
+            (unsigned) id(durata_irrigazione)
+          );
+
+      # -----------------------------------------------
+      # Spegne tutto prima di iniziare
+      # -----------------------------------------------
+
+      - script.execute: all_off
+
+      # -----------------------------------------------
+      # Attiva OUT1
+      # -----------------------------------------------
+
+      - switch.turn_on: uscita_1
+
+      - lambda: |-
+          id(irrigazione_uscita) = 1;
+
+          id(irrigazione_fine) =
+            millis() +
+            ((uint32_t) id(durata_irrigazione) * 1000UL);
+
+          ESP_LOGI(
+            "irrigazione",
+            "SEQUENZA LOCALE: OUT1 ON - %u secondi",
+            (unsigned) id(durata_irrigazione)
+          );
+  - id: prossimo_settore_locale
+    mode: restart
+    then:
+
+      - lambda: |-
+          id(settore_locale)++;
+
+          ESP_LOGI(
+            "irrigazione",
+            "Passaggio al settore %d",
+            id(settore_locale)
+          );
+
+      - script.execute: all_off
+
+      - lambda: |-
+          int settore = id(settore_locale);
+
+          switch (settore) {
+
+            case 1:
+              id(uscita_1).turn_on();
+              break;
+
+            case 2:
+              id(uscita_2).turn_on();
+              break;
+
+            case 3:
+              id(uscita_3).turn_on();
+              break;
+
+            case 4:
+              id(uscita_4).turn_on();
+              break;
+
+            case 5:
+              id(uscita_5).turn_on();
+              break;
+
+            case 6:
+              id(uscita_6).turn_on();
+              break;
+
+            case 7:
+              id(uscita_7).turn_on();
+              break;
+
+            case 8:
+              id(uscita_8).turn_on();
+              break;
+
+            default:
+              return;
+          }
+
+          id(irrigazione_uscita) = settore;
+
+          id(irrigazione_fine) =
+            millis() +
+            ((uint32_t) id(durata_irrigazione) * 1000UL);
+
+          ESP_LOGI(
+            "irrigazione",
+            "OUT%d ON - timer %u secondi",
+            settore,
+            (unsigned) id(durata_irrigazione)
+          );
+          
+  - id: start_irrigation_script
+    mode: single
+    then:
+      - switch.turn_on: uscita_1
+      - delay: 2 min
+      - switch.turn_off: uscita_1
+      - switch.turn_on: uscita_2
+      - delay: 2 min
+      - switch.turn_off: uscita_2
+      - switch.turn_on: uscita_3
+      - delay: 2 min
+      - switch.turn_off: uscita_3
+      - switch.turn_on: uscita_4
+      - delay: 2 min
+      - switch.turn_off: uscita_4
+      - switch.turn_on: uscita_5
+      - delay: 2 min
+      - switch.turn_off: uscita_5
+      - switch.turn_on: uscita_6
+      - delay: 2 min
+      - switch.turn_off: uscita_6
+      - switch.turn_on: uscita_7
+      - delay: 2 min
+      - switch.turn_off: uscita_7
+      - switch.turn_on: uscita_8
+      - delay: 2 min
+      - switch.turn_off: uscita_8
+  - id: all_off
+    mode: single
+    then:
+      - switch.turn_off: uscita_1
+      - switch.turn_off: uscita_2
+      - switch.turn_off: uscita_3
+      - switch.turn_off: uscita_4
+      - switch.turn_off: uscita_5
+      - switch.turn_off: uscita_6
+      - switch.turn_off: uscita_7
+      - switch.turn_off: uscita_8
+
+  - id: send_status_ack
+    mode: restart
+    then:
+      - lambda: |-
+          uint8_t stato = 0;
+
+          // Costruzione bitmap stato uscite
+          if (id(uscita_1).state) stato |= 0x01;
+          if (id(uscita_2).state) stato |= 0x02;
+          if (id(uscita_3).state) stato |= 0x04;
+          if (id(uscita_4).state) stato |= 0x08;
+          if (id(uscita_5).state) stato |= 0x10;
+          if (id(uscita_6).state) stato |= 0x20;
+          if (id(uscita_7).state) stato |= 0x40;
+          if (id(uscita_8).state) stato |= 0x80;
+
+          // Pacchetto ACK:
+          // A5 = identificatore ACK
+          // 02 = stato uscite
+          // XX = bitmap
+          uint8_t ack[3];
+
+          ack[0] = 0xA5;
+          ack[1] = 0x02;
+          ack[2] = stato;
+
+          id(uart_0).write_array(ack, 3);
+
+          ESP_LOGI(
+            "irrigazione",
+            "ACK STATO: A5 02 %02X",
+            stato
+          );
+          
+  - id: display_on
+    mode: restart
+    then:
+      - lambda: |-
+          id(display_attivo) = true;
+          id(display_ultimo_evento) = millis();
+          id(my_display).turn_on();
+
+  - id: display_off
+    mode: restart
+    then:
+      - lambda: |-
+          id(display_attivo) = false;
+          id(my_display).turn_off();        
+
+interval:
+  - interval: 50ms
+    then:
+    - lambda: |-
+        static uint8_t buffer[4];
+        static uint8_t index = 0;
+
+        while (id(uart_0).available()) {
+
+          uint8_t b;
+
+          if (!id(uart_0).read_byte(&b)) {
+            break;
+          }
+
+          ESP_LOGI(
+            "irrigazione",
+            "BYTE RX: 0x%02X",
+            b
+          );
+
+          // --------------------------------------------------
+          // Ricerca dell'inizio frame
+          // --------------------------------------------------
+          if (index == 0) {
+
+             // Il frame deve iniziare con 0x01
+             if (b != 0x01) {
+
+               ESP_LOGW(
+                   "irrigazione",
+                   "Byte ignorato fuori frame: 0x%02X",
+                   b
+               );
+
+               continue;
+            }
+
+            buffer[0] = b;
+            index = 1;
+
+            continue;
+          }
+          
+          buffer[index++] = b;
+
+          // ------------------------------------------------
+          // FRAME COMPLETO
+          // ------------------------------------------------
+
+          if (index == 4) {
+
+            ESP_LOGI(
+              "irrigazione",
+              "FRAME: %02X %02X %02X %02X",
+              buffer[0],
+              buffer[1],
+              buffer[2],
+              buffer[3]
+            );
+
+            uint8_t comando = buffer[0];
+            uint8_t uscita  = buffer[1];
+
+            uint16_t tempo =
+              ((uint16_t)buffer[2] << 8) |
+              buffer[3];
+
+            ESP_LOGI(
+              "irrigazione",
+              "Comando=0x%02X Uscita=%d Tempo=%u s",
+              comando,
+              uscita,
+              tempo
+            );
+
+
+            // =================================================
+            // COMANDO 0x01
+            // IRRIGAZIONE TEMPORIZZATA
+            // =================================================
+
+            if (comando == 0x01) {
+
+              // -----------------------------------------------
+              // Controllo parametri
+              // -----------------------------------------------
+
+              if (uscita < 1 || uscita > 8) {
+
+                ESP_LOGW(
+                  "irrigazione",
+                  "ERRORE: uscita non valida: %d",
+                  uscita
+                );
+              }
+
+              else if (tempo == 0) {
+
+                ESP_LOGW(
+                  "irrigazione",
+                  "ERRORE: tempo = 0"
+                );
+              }
+
+              else {
+
+                ESP_LOGI(
+                  "irrigazione",
+                  "Nuovo ciclo: OUT %d per %u secondi",
+                  uscita,
+                  tempo
+                );
+
+
+                // ---------------------------------------------
+                // FERMA EVENTUALE CICLO PRECEDENTE
+                // ---------------------------------------------
+
+                ESP_LOGI(
+                  "irrigazione",
+                  "Spegnimento di tutte le uscite"
+                );
+
+                id(all_off).execute();
+
+                // Invia ACK verso HA
+                //id(send_status_ack).execute();
+
+                // ---------------------------------------------
+                // Invalida il vecchio timer
+                // ---------------------------------------------
+
+                id(irrigazione_uscita) = 0;
+                id(irrigazione_fine) = 0;
+
+
+                // ---------------------------------------------
+                // Attiva la nuova uscita
+                // ---------------------------------------------
+
+                switch (uscita) {
+
+                  case 1:
+                    id(uscita_1).turn_on();
+                    break;
+
+                  case 2:
+                    id(uscita_2).turn_on();
+                    break;
+
+                  case 3:
+                    id(uscita_3).turn_on();
+                    break;
+
+                  case 4:
+                    id(uscita_4).turn_on();
+                    break;
+
+                  case 5:
+                    id(uscita_5).turn_on();
+                    break;
+
+                  case 6:
+                    id(uscita_6).turn_on();
+                    break;
+
+                  case 7:
+                    id(uscita_7).turn_on();
+                    break;
+
+                  case 8:
+                    id(uscita_8).turn_on();
+                    break;
+                }
+
+                // ACK: nuova uscita attivata
+                id(send_status_ack).execute();
+                
+                // ---------------------------------------------
+                // Memorizza il nuovo timer
+                // ---------------------------------------------
+
+                id(irrigazione_uscita) = uscita;
+
+                id(irrigazione_fine) =
+                  millis() +
+                  ((uint32_t)tempo * 1000UL);
+
+
+                ESP_LOGI(
+                  "irrigazione",
+                  "OUT %d ATTIVA - timer %u secondi",
+                  uscita,
+                  tempo
+                );
+              }
+            }
+
+
+            // =================================================
+            // COMANDO 0x02
+            // SPEGNIMENTO
+            // =================================================
+
+            else if (comando == 0x02) {
+
+              // -----------------------------------------------
+              // 0xFF = spegnimento generale
+              // -----------------------------------------------
+
+              if (uscita == 0xFF) {
+
+                ESP_LOGI(
+                  "irrigazione",
+                  "COMANDO OFF GENERALE"
+                );
+
+                id(all_off).execute();
+
+                id(irrigazione_uscita) = 0;
+                id(irrigazione_fine) = 0;
+                
+                // Invia ACK a Homeassistant
+                id(send_status_ack).execute();
+              }
+
+
+              // -----------------------------------------------
+              // Spegnimento singola uscita
+              // -----------------------------------------------
+
+              else if (uscita >= 1 && uscita <= 8) {
+
+                ESP_LOGI(
+                  "irrigazione",
+                  "OFF uscita %d",
+                  uscita
+                );
+
+                switch (uscita) {
+
+                  case 1:
+                    id(uscita_1).turn_off();
+                    break;
+
+                  case 2:
+                    id(uscita_2).turn_off();
+                    break;
+
+                  case 3:
+                    id(uscita_3).turn_off();
+                    break;
+
+                  case 4:
+                    id(uscita_4).turn_off();
+                    break;
+
+                  case 5:
+                    id(uscita_5).turn_off();
+                    break;
+
+                  case 6:
+                    id(uscita_6).turn_off();
+                    break;
+
+                  case 7:
+                    id(uscita_7).turn_off();
+                    break;
+
+                  case 8:
+                    id(uscita_8).turn_off();
+                    break;
+                }
+
+
+                // ---------------------------------------------
+                // Se era quella temporizzata, annulla timer
+                // ---------------------------------------------
+
+                if (id(irrigazione_uscita) == uscita) {
+
+                  id(irrigazione_uscita) = 0;
+                  id(irrigazione_fine) = 0;
+
+                  ESP_LOGI(
+                    "irrigazione",
+                    "Timer annullato"
+                  );
+                }
+              }
+
+
+              else {
+
+                ESP_LOGW(
+                  "irrigazione",
+                  "OFF: uscita non valida: %d",
+                  uscita
+                );
+              }
+            }
+
+
+            // =================================================
+            // COMANDO SCONOSCIUTO
+            // =================================================
+
+            else {
+
+              ESP_LOGW(
+                "irrigazione",
+                "Comando sconosciuto: 0x%02X",
+                comando
+              );
+            }
+
+
+            // -----------------------------------------------
+            // Preparati per il prossimo frame
+            // -----------------------------------------------
+
+            index = 0;
+          }
+        }
+        
+
+          // =================================================
+          // SEQUENZA LOCALE
+          // =================================================
+
+          if (id(programma_locale) &&
+              id(irrigazione_fine) != 0) {
+
+            uint32_t adesso = millis();
+
+            if ((int32_t)(adesso - id(irrigazione_fine)) >= 0) {
+
+              ESP_LOGI(
+                "irrigazione",
+                "Timer OUT%d scaduto",
+                id(irrigazione_uscita)
+              );
+
+              // -------------------------------------------
+              // Se siamo arrivati a OUT8 -> FINE CICLO
+              // -------------------------------------------
+
+              if (id(settore_locale) >= 8) {
+
+                ESP_LOGI(
+                  "irrigazione",
+                  "SEQUENZA LOCALE COMPLETATA"
+                );
+
+                id(all_off).execute();
+
+                id(programma_locale) = false;
+                id(settore_locale) = 0;
+                id(irrigazione_uscita) = 0;
+                id(irrigazione_fine) = 0;
+              }
+
+              // -------------------------------------------
+              // Altrimenti passa al settore successivo
+              // -------------------------------------------
+
+              else {
+
+                id(prossimo_settore_locale).execute();
+              }
+            }
+          }    
+  - interval: 100ms
+    then:
+      - lambda: |-
+          if (id(irrigazione_uscita) != 0 &&
+              (int32_t)(millis() - id(irrigazione_fine)) >= 0) {
+
+            switch (id(irrigazione_uscita)) {
+
+              case 1:
+                id(uscita_1).turn_off();
+                break;
+
+              case 2:
+                id(uscita_2).turn_off();
+                break;
+
+              case 3:
+                id(uscita_3).turn_off();
+                break;
+
+              case 4:
+                id(uscita_4).turn_off();
+                break;
+
+              case 5:
+                id(uscita_5).turn_off();
+                break;
+
+              case 6:
+                id(uscita_6).turn_off();
+                break;
+
+              case 7:
+                id(uscita_7).turn_off();
+                break;
+
+              case 8:
+                id(uscita_8).turn_off();
+                break;
+            }
+            
+            // ACK: nuova uscita attivata
+            id(send_status_ack).execute();
+                
+            ESP_LOGI(
+              "irrigazione",
+              "USCITA %d OFF - TIMER SCADUTO",
+              id(irrigazione_uscita)
+            );
+            
+            id(irrigazione_uscita) = 0;
+            id(irrigazione_fine) = 0;
+          }
+          
+  - interval: 1s
+    then:
+      - lambda: |-
+
+          // Durante l'irrigazione il display deve rimanere acceso
+          if (id(irrigazione_uscita) != 0) {
+
+            if (!id(display_attivo)) {
+              id(display_attivo) = true;
+              id(my_display).turn_on();
+            }
+
+            id(display_ultimo_evento) = millis();
+
+            return;
+          }
+
+          // Nessuna irrigazione:
+          // spegni dopo 30 secondi di inattività
+
+          if (id(display_attivo) &&
+              (millis() - id(display_ultimo_evento)) >= 30000UL) {
+
+            ESP_LOGI(
+              "display",
+              "Nessuna attività da 30 secondi - DISPLAY OFF"
+            );
+
+            id(display_attivo) = false;
+            id(my_display).turn_off();
+          }
